@@ -1,0 +1,138 @@
+---
+title: 'Working with Financial Data in R'
+author: "Jarred Glaser"
+date: "February 10, 2018"
+output: md_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### (a)
+
+Import the data in the file using the R function read.csv() and name them twtr, fb and sp. Now extract the price data from the second column of each of these les and name them twtr.price, fb.price and sp.price.
+
+```{r}
+TWTR <- read.csv("TWTR.csv")
+FB <- read.csv("FB.csv")
+SP <- read.csv("GSPC.csv")
+```
+
+```{r}
+#Extract only 2 needed columns
+twtr <- TWTR[,c("Date","Adj.Close")]
+fb <- FB[,c("Date","Adj.Close")]
+sp <- SP[,c("Date","Adj.Close")]
+
+#Etract Price Column
+twtr_price <- twtr[,2]
+fb_price <- fb[,2]
+sp_price <- sp[,2]
+```
+
+#### (b)
+
+Plot the closing price data for all three stocks using the `plot()` function. Notice that the dates do not show up on the x-axis in the line plot.
+
+```{r}
+plot(twtr_price, type="l", main="TWTR Adj. Close Price")
+plot(fb_price, type="l", main="FB Adj. Close Price")
+plot(sp_price, type="l", main="S&P 500 Adj. Close Price")
+```
+
+#### (c)
+
+Now create returns data by taking the difference of the log of price. Name them twtr.rtn, fb.rtn and sp.rtn. Calculate the mean and standard deviation of these three series and report the results.
+
+```{r}
+#Compute log returns
+twtr_rtn <- diff(log(twtr_price))
+twtr_rtn <- (na.omit(twtr_rtn))*100
+fb_rtn <- diff(log(fb_price))
+fb_rtn <- (na.omit(fb_rtn))*100
+sp_rtn <- diff(log(sp_price))
+sp_rtn <- (na.omit(sp_rtn))*100
+
+#Calculate Mean and SD
+twtr_rtn_m <- mean(twtr_rtn)
+fb_rtn_m <- mean(fb_rtn)
+sp_rtn_m <- mean(sp_rtn)
+
+twtr_rtn_sd <- sd(twtr_rtn)
+fb_rtn_sd <- sd(fb_rtn)
+sp_rtn_sd <- sd(sp_rtn)
+
+sprintf("Mean / Std. of twtr_rtn: %f / %f",twtr_rtn_m, twtr_rtn_sd)
+sprintf("Mean / Std. of fb_rtn: %f / %f", fb_rtn_m,fb_rtn_sd)
+sprintf("Mean / Std. of sp_rtn: %f / %f", sp_rtn_m,sp_rtn_sd)
+```
+
+#### (d)
+
+Run a regression of Twitter stock price return on S&P 500 stock returns by using the R function lm(). This is a version of the celebrated __CAPM model__ in finance. Report the summary of this regression. Elaborate on the interpretation of the coefficient on S&P500 return. What does it mean?
+
+
+```{r}
+twtr_capm <- lm(twtr_rtn~sp_rtn)
+summary(twtr_capm)
+```
+
+We find that the intercept is insignificant and the slope coefficient is significant at all significance levels. The coefficient of 1.1391 on S&P 500 return shows that a percentage point change in S&P500 stock return is associated with 1.1391 percentage point change in Twitter stock returns. This implies that Twitter is on average much more volatile than aggregate stock returns
+
+#### (e)
+
+Is the intercept signicant in the above regression? Report 95% condence band for both the intercept and the slope coefficient.
+
+As explained above, the intercept in the above regression is not significant. This also suggests that in spite of higher volatility in Twitter stock return as compared to the aggregate market, the average return is also not signifficantly different than the aggregate market.
+
+```{r}
+conf_beta <- confint(twtr_capm, 'sp_rtn', level=0.95)
+conf_alpha <- confint(twtr_capm, '(Intercept)', level=0.95)
+
+#beta confidence band:
+conf_beta
+
+#alpha confidence band:
+conf_alpha
+
+```
+
+#### (f)
+
+Now run a regression of Facebook stock returns on S&P 500 returns and report the results.
+
+```{r}
+fb_capm <- lm(fb_rtn~sp_rtn)
+summary(fb_capm)
+```
+
+The positive sign on the intercept implies that the Facebook stock on average yields higher returns after controlling for the movements in S&P500 returns, however, it is insignificant. Rsquared of 0.27 implies that 27 percent of the variations in Facebook stock returns can be explained by S&P500 returns.
+
+#### (g)
+
+Plot the residuals of the regression above
+
+```{r}
+plot(fb_capm$residuals,main="Facebook CAPM Residual Plot",type='l')
+```
+
+#### (h)
+
+Are the residuals in (g) normally distributed?
+
+```{r, warning=FALSE,message=FALSE}
+library(fBasics)
+normalTest(fb_capm$residuals)
+normalTest(fb_capm$residuals,method='jb')
+```
+
+Both the __Shapiro - Wilk Normality Test__ and the __Jarque - Bera Normalality Test__ reject the $H_0$ that the residuals of the regression are normally distributed. This is an issue, because one of our assumptions of a linear regression model is that residuals are normally distributed. 
+
+We can also visualize this with a __Normal Probability Plot__. If the residuals are normally distributed they should follow closely along the Normal probability line. Deviation from the straight line shows evidence of non-normally distributed residuals.
+
+```{r}
+qqnorm(fb_capm$residuals)
+qqline(fb_capm$residuals)
+```
+

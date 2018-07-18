@@ -1,0 +1,223 @@
+---
+title: 'Forecasting with Trend and Seasonality in R'
+author: "Jarred Glaser"
+date: "February 16, 2018"
+output: md_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir="C:\\Users\\jarre\\OneDrive\\RStudio\\411 HW\\411HW")
+```
+
+## Analytical Questions
+
+### Number 1) 
+
+In 1965, Intel cofounder Gordon Moore predicted that the number of transistors that one could place on a square inch integrated circuit would double every 12 months.
+
+#### a) 
+
+What sort of trend is this?
+
+Moore's law would be considered __deterministic__ because it does not include any randomness in the trend.  In other words there is little to no uncertainty in the trend.
+
+#### b) 
+
+Given a monthly series containing the number of transistors per square inch for the latest integrated circuit, how would you test Mooreís prediction? How would you test the currently accepted form of Mooreís Law-namely, that the number of transistors actually doubles every 18 months
+
+A way to test Moore's theory, may be to create a regression using the series data that looks something like:
+
+$$ y = \alpha + \beta \cdot x_t $$
+Where $y$ is the number of transistors, and $x_t$ is the month converted to a time series measurement(1,2,3,...,$t$ number of months). Moore's law predicts that the number of transistors would double each year. If this was a regression using yearly data we would expect $\beta$ to be equal to 2. However, because this is monthly data, we would expect $\beta$ to be equal to $2/12 = 0.167$. We could create a hypothesis test that $\beta$ is equal to 0.167. If the test passes with a significance of whatever we set our threshold at (95%), we could say that Moore was correct. The equation for the hypothesis test would be:
+$$\frac{\beta - 0.167}{se(\beta)}$$
+The $H_0$ would be that $\beta$ is equal to 0.167. If we reject $H_0$ we would reject Moore's law.
+
+If we wanted to test the currently accepted form of Moore's law we would do a similar process, but instead create a hypothesis test that $\beta$ is equal to $2/18=0.11$. The equation in this case would be:
+$$\frac{\beta - 0.11}{se(\beta)}$$
+
+### Number 2) 
+
+You're sure that a series you want to forecast is trending and that a linear trend is adequate, but you're not sure whether seasonality is important. To be safe, you fit a forecasting model with both trend and seasonal dummies. 
+
+#### a) 
+
+The hypothesis of no seasonality, in which case you could drop the seasonal dummies, corresponds to equal seasonal coeficients across seasons, which is a set of s-1 linear restrictions. How would you perform an F-test of the hypothesis? What assumptions are you implicitly making about the regressionís error term?
+
+An F test that all of the season coefficients are equal to each other ($\gamma_1=\gamma_2=...=\gamma_n$) could be tested using the F-test:
+$$F_{r,n-k-1}=\frac{RSS^2_R - RSS^2_U/r}{RSS_U/(n-k-1)}$$
+Where $RSS_R$ is the RSS with the restriction that all $\gamma$'s are equal, or in other words, seasonality has no effect placed on it. In mathematical terms the above would be explained by:
+$$RSS_R = \sum (y_i - \beta_1 \cdot TIME_t)^2$$
+$$RSS_U = \sum(y_i - \beta_1 \cdot TIME_t - \sum \gamma_i D_{it})^2$$
+The assumptions we make about the error term in a model that includes seasonality is that the error term is serially uncorrelated, or in other words, there is no autocorrelation in the model.
+
+#### b) 
+
+Alternatively, how would you use forecast model selection criteria to decide whether to include the seasonal dummies?
+
+Model forecast criteria can also be used to decide which model to include. We could use either:
+$$ AIC = e^{(2k/T)}\frac{\sum e^2_t}{T}$$
+or
+
+$$SC = T^{(K/T)}\frac{\sum e_t^2}{T}$$
+
+In the case where we are unsure what criteria to use, we would choose the SC because it has a greater penalty for including unnecessary variables.
+
+#### c) 
+
+What would you do in the event that the results of the "hypothesis testing" and model selection approaches disagree?
+
+It would be better to go with the model selection approach, specifically the SC because it imposes the highest penalty for including unneeded variables in the regression.
+
+## Empirical Questions
+
+### Number 1)
+
+The data file DataLiquor.csv represents the monthly sales of liquor in the U.S. from 1987:01 through 2014:12. Upload the data in R.
+
+```{r}
+data <- read.csv("DataLiquor.csv")
+```
+
+#### a)  
+
+Plot and discuss the properties of data.
+
+```{r}
+liquor <- data[,1]
+plot(liquor, type="l")
+```
+
+It appears that this liquor sales data definitely follows a trend or seasonality, where there is an expected peak in liquor sales at certain time intervals.
+
+#### b)  
+
+Fit a linear, quadratic and exponential trend to liquor sales and report the results for the full sample.
+
+```{r}
+library(forecast)
+liquor <- ts(liquor)
+time = seq(length(liquor))
+#Linear Model
+linear.trend.mod=tslm(liquor~trend)
+summary(linear.trend.mod)
+
+#Quadratic Model
+quad.trend.mod=tslm(liquor~trend+I(trend^2))
+summary(quad.trend.mod)
+
+#Exponential Model
+exp.trend.mod=lm(liquor~exp(time))
+summary(exp.trend.mod)
+```
+
+All of the coefficients in each model are significant at the 99% confidence level, showing strong evidence that there is clearly trend in the data.
+
+#### d)
+
+Report the AIC and BIC values for all three trend models. Which model is superior according to these model selection criteria?
+
+```{r}
+vec.AIC.trend <- vector()
+vec.AIC.trend[1] <- AIC(linear.trend.mod)
+vec.AIC.trend[2] <- AIC(quad.trend.mod)
+vec.AIC.trend[3] <- AIC(exp.trend.mod)
+
+vec.BIC.trend <- vector()
+vec.BIC.trend[1] <- BIC(linear.trend.mod)
+vec.BIC.trend[2] <- BIC(quad.trend.mod)
+vec.BIC.trend[3] <- BIC(exp.trend.mod)
+
+vec.AIC.trend
+
+vec.BIC.trend
+
+```
+
+The quadratic trend model seems to have the lowest BIC and AIC, so according to these selection criteria this model would be superior.
+
+#### e) 
+
+Plot the actual value along with the predicted value the residual from the linear trend model on a single graph. What can you infer from visualizing the residuals.
+
+```{r}
+linear.predict <- predict(linear.trend.mod)
+linear.residual <- liquor - linear.predict
+
+linear.resid.ts=ts(data=linear.residual,start=c(1987,12),frequency=12)
+linear.pred.ts=ts(data=linear.predict,start=c(1987,12),frequency=12)
+linear.ts=ts(data=liquor,start=c(1987,12),frequency=12)
+
+ts.plot(linear.resid.ts,linear.pred.ts,linear.ts,
+        gpars=list(xlab="year", ylab="value", lty=c(1:3)))
+```
+
+
+From the residuals, we can definitely see that a trend exists in the data and that our linear model is not capturing that trend well every time the spike in liquor sales trend occurs. 
+
+#### f)
+
+Create monthly seasonal dummies and estimate a linear trend model with seasonal dummies as well as a quadratic trend model with a seasonal dummies. Report the results.
+
+```{r}
+liquor.ts <- ts(data=liquor,start=c(1987,1),frequency=12)
+
+linear.seas.mod=tslm(liquor.ts~trend+season)
+quad.seas.mod=tslm(liquor.ts~trend+I(trend^2)+season)
+
+summary(linear.seas.mod)
+summary(quad.seas.mod)
+```
+
+#### g)
+
+Is it possible to estimate the seasonal dummy model with all dummies as well as an intercept? Explain.
+
+We cannot predict a model with seasonal dummies that includes all of the seasons. We have to drop one dummy variable or else we will have multicollinearity in our model.
+
+#### h)
+
+Now compare the AIC and BIC values for the estimated models in part f) with the three trend models in d). Does inclusion of seasonal dummies improve the t of the model for liquor sales?
+
+```{r}
+vec.AIC.seas <- vector()
+vec.AIC.seas[1] <- AIC(linear.seas.mod)
+vec.AIC.seas[2] <- AIC(quad.seas.mod)
+
+vec.BIC.seas <- vector()
+vec.BIC.seas[1] <- BIC(linear.seas.mod)
+vec.BIC.seas[2] <- BIC(quad.seas.mod)
+
+vec.AIC.seas
+vec.BIC.seas
+
+vec.AIC.trend
+vec.BIC.trend
+```
+
+In both measurements the inclusion of seasonality improved the fit of the model (lowered the AIC or BIC). The quadratic model still performs better than the linear one.
+
+#### I)
+
+```{r}
+linear.predict.seas <- predict(linear.seas.mod)
+linear.residual.seas <- liquor - linear.predict.seas
+
+linear.resid.ts.seas=ts(data=linear.residual.seas,start=c(1987,1),frequency=12)
+linear.pred.ts.seas=ts(data=linear.predict.seas,start=c(1987,1),frequency=12)
+linear.ts=ts(data=liquor,start=c(1987,1),frequency=12)
+
+ts.plot(linear.resid.ts.seas,linear.pred.ts.seas,linear.ts,
+        gpars=list(xlab="year", ylab="value", col=c(1:3)))
+```
+
+We can now see that the predicted values much more closely match the actual values when adding seasonality dummy variables, and the residuals do not increase as much with the seasonality trend. This shows that including the seasonality dummy variables has helped to improve our model.
+
+```{r message=FALSE}
+library(lmtest)
+dwtest(linear.seas.mod)
+```
+
+The p-value for the Durbin-Watson test shows that we reject the $H_0$ that autocorrelation does not exist. Therefore, in the model with seasonal dummies the errors are correlated.
+
+
